@@ -1,4 +1,3 @@
-setuptools
 sympy
 numba
 refvars
