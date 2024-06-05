@@ -1,0 +1,23 @@
+# Python shenanigans...
+/**/__pycache__
+/**/*.egg-info
+/**/.DS_Store
+
+# From `compute_primes.py`...
+/offset.txt
+/theta.txt
+/bits.txt
+/stop_at.txt
+
+# Misc...
+/reports
+/dist
+/build
+/.vscode
+/log.txt
+/payload
+/compiled_executer.py
+
+# Logs...
+/controller.log.txt
+/buff
